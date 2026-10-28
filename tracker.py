@@ -10,6 +10,7 @@ import os
 import re
 import smtplib
 import sys
+from datetime import datetime
 from email.mime.text import MIMEText
 from pathlib import Path
 
@@ -34,35 +35,24 @@ def env(name):
     return v
 
 
-def all_frames(page):
-    return [page] + [f for f in page.frames if f != page.main_frame]
+def page_text(pages):
+    """열려 있는 모든 페이지/프레임의 텍스트를 합친다."""
+    out = ""
+    for pg in pages:
+        for fr in [pg] + [f for f in pg.frames if f != pg.main_frame]:
+            try:
+                out += "\n" + fr.locator("body").inner_text(timeout=5000)
+            except Exception:
+                pass
+    return out
 
 
-def find_input(page):
-    """H B/L(운송장) 입력칸을 최대한 유연하게 찾는다."""
-    selectors = [
-        "input[id*='hbl' i]",
-        "input[name*='hbl' i]",
-        "input[title*='H B/L' i]",
-        "input[title*='HBL' i]",
-        "input[title*='운송장' i]",
-        "input[placeholder*='운송장' i]",
-    ]
-    for fr in all_frames(page):
-        for sel in selectors:
-            loc = fr.locator(sel)
-            for i in range(loc.count()):
-                el = loc.nth(i)
-                if el.is_visible():
-                    return fr, el
-    return None, None
-
-
-def dump_debug(page, reason):
+def dump_debug(ctx, reason):
     DEBUG_DIR.mkdir(exist_ok=True)
     try:
-        page.screenshot(path=str(DEBUG_DIR / "page.png"), full_page=True)
-        (DEBUG_DIR / "page.html").write_text(page.content(), encoding="utf-8")
+        pg = ctx.pages[-1]
+        pg.screenshot(path=str(DEBUG_DIR / "page.png"), full_page=True)
+        (DEBUG_DIR / "page.html").write_text(pg.content(), encoding="utf-8")
         (DEBUG_DIR / "reason.txt").write_text(reason, encoding="utf-8")
     except Exception as e:
         print(f"[경고] 디버그 저장 실패: {e}")
@@ -70,6 +60,7 @@ def dump_debug(page, reason):
 
 def scrape(waybill):
     """통관 처리 이력 줄들을 리스트로 반환. 실패 시 예외."""
+    year = str(datetime.now().year)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         ctx = browser.new_context(
@@ -84,35 +75,22 @@ def scrape(waybill):
         try:
             page.goto(URL, wait_until="networkidle", timeout=60000)
 
-            fr, box = find_input(page)
-            if box is None:
-                # 메뉴를 한 번 눌러서 조회 화면으로 이동해 본다
-                for label in ["화물통관진행정보", "화물진행정보", "수입화물진행정보"]:
-                    link = page.get_by_text(label, exact=False).first
-                    if link.count() and link.is_visible():
-                        link.click()
-                        page.wait_for_load_state("networkidle")
-                        break
-                fr, box = find_input(page)
-            if box is None:
-                raise RuntimeError("운송장 입력칸을 찾지 못했어요 (페이지 구조 변경 가능성)")
+            # 메인 화면의 '화물진행정보' 위젯: M B/L - H B/L 모드 선택 후 H B/L 입력
+            page.click("label[for='INDEX_cargoS02']")
+            page.fill("#INDEX_hblNo", waybill)
+            page.select_option("#INDEX_blYy", year)
 
-            box.fill(waybill)
-            btn = fr.get_by_role("button", name=re.compile("조회")).first
-            if btn.count():
-                btn.click()
-            else:
-                box.press("Enter")
-            page.wait_for_timeout(5000)  # 결과 렌더링 대기
+            # 결과가 새 창으로 열릴 수도, 같은 페이지에 뜰 수도 있어서 둘 다 대응
+            try:
+                with ctx.expect_page(timeout=8000):
+                    page.click("#INDEX_btnRetrieveCargPrgsInfo")
+            except PWTimeout:
+                pass
+            page.wait_for_timeout(5000)
 
-            text = ""
-            for f in all_frames(page):
-                try:
-                    text += "\n" + f.locator("body").inner_text(timeout=5000)
-                except Exception:
-                    pass
+            text = page_text(ctx.pages)
 
-            if "조회된 데이터가 없" in text or "조회결과가 없" in text:
+            if re.search(r"조회\s*(된\s*)?(결과|데이터|내역)?(가|이)?\s*없", text):
                 return []
 
             lines = []
@@ -125,7 +103,7 @@ def scrape(waybill):
                 raise RuntimeError("결과 화면에서 처리단계를 읽지 못했어요")
             return lines
         except (PWTimeout, RuntimeError) as e:
-            dump_debug(page, str(e))
+            dump_debug(ctx, str(e))
             raise
         finally:
             browser.close()

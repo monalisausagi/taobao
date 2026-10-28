@@ -1,5 +1,3 @@
-streamlit
-pandas
-pydeck
-beautifulsoup4
-playwright
+streamlit>=1.40
+pydeck>=0.9
+requests

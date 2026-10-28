@@ -15,57 +15,60 @@ if st.button("배송 경로 및 타임라인 조회"):
         st.success(f"운송장 번호 {waybill_no} 조회 완료!")
         
         # 1. 상단: 세계지도 시뮬레이션
-        st.subheader("📍 글로벌 이동 경로 및 수단")
+        st.subheader("📍 글로벌 세밀 이동 경로")
         
-        # 주요 거점 위치 데이터
+        # 상세 거점 데이터
         points_data = pd.DataFrame([
-            {"name": "중국 웨이하이 물류센터 (출발)", "lat": 37.50, "lon": 122.12, "status": "출발"},
-            {"name": "해상 이동 중 (선박)", "lat": 37.48, "lon": 124.30, "status": "이동중"},
-            {"name": "인천항 세관 (통관 심사)", "lat": 37.45, "lon": 126.63, "status": "세관"},
-            {"name": "국내 택배사 인계 (트럭)", "lat": 36.35, "lon": 127.38, "status": "배송중"},
-            {"name": "한국 최종 도착지", "lat": 35.18, "lon": 129.07, "status": "도착"}
+            {"name": "중국 웨이하이 물류창고 (출발)", "lat": 37.50, "lon": 122.12},
+            {"name": "중국 출항지 항구", "lat": 37.42, "lon": 122.45},
+            {"name": "황해 해상 이동 구간 (선박 🚢)", "lat": 37.30, "lon": 124.50},
+            {"name": "인천항 입항 및 세관 (⚓)", "lat": 37.45, "lon": 126.63},
+            {"name": "국내 물류 터미널 (택배사 인계 🚚)", "lat": 37.00, "lon": 127.10},
+            {"name": "한국 최종 도착지 (🏠)", "lat": 35.18, "lon": 129.07}
         ])
         
-        # 지상/해상 이동 경로 선
-        route_segments = pd.DataFrame([
+        # 부드러운 곡선(Arc)을 위한 구간별 연결 데이터 (중국 ➔ 인천 ➔ 국내최종)
+        arc_segments = pd.DataFrame([
+            # 중국 웨이하이 ➔ 인천항 (바다를 건너는 해상 경로)
             {"from_lon": 122.12, "from_lat": 37.50, "to_lon": 126.63, "to_lat": 37.45},
+            # 인천항 ➔ 국내 최종 목적지 (육상 간선 수송 경로)
             {"from_lon": 126.63, "from_lat": 37.45, "to_lon": 129.07, "to_lat": 35.18}
         ])
 
-        # 레이어 1: 이동 경로 선 (LineLayer)
-        line_layer = pdk.Layer(
-            'LineLayer',
-            data=route_segments,
+        # 레이어 1: 곡선형 이동 경로 (ArcLayer - 입체적이고 부드러운 물류 이동선)
+        arc_layer = pdk.Layer(
+            'ArcLayer',
+            data=arc_segments,
             get_source_position='[from_lon, from_lat]',
             get_target_position='[to_lon, to_lat]',
-            get_color='[30, 144, 255, 220]',
-            get_width=4,
+            get_source_color='[0, 150, 255, 220]', # 출발지 부근 파란색
+            get_target_color='[255, 100, 0, 220]', # 도착지 부근 주황색
+            get_width=5,
             pickable=True
         )
 
-        # 레이어 2: 거점 위치 마커 (ScatterplotLayer)
+        # 레이어 2: 주요 거점 마커 (ScatterplotLayer)
         node_layer = pdk.Layer(
             'ScatterplotLayer',
             data=points_data,
             get_position='[lon, lat]',
-            get_color='[255, 99, 71, 240]',
-            get_radius=12000,
+            get_color='[255, 255, 255, 250]',
+            get_radius=7000,
             pickable=True
         )
 
-        # 지도 시점 설정
+        # 지도 시점 설정 (한눈에 보이도록 줌인)
         view_state = pdk.ViewState(
-            latitude=36.5,
+            latitude=36.8,
             longitude=125.5,
-            zoom=5.5,
-            pitch=0,
+            zoom=6.2,
+            pitch=30, # 약간의 입체감을 주어 경로가 돋보이게 설정
         )
 
-        # 툴팁 설정 (마우스나 터치 시 위치 이름이 팝업으로 뜸)
         st.pydeck_chart(pdk.Deck(
-            layers=[line_layer, node_layer],
+            layers=[arc_layer, node_layer],
             initial_view_state=view_state,
-            tooltip={"html": "<b>위치:</b> {name}", "style": {"background": "grey", "color": "white", "font-family": "sans-serif"}}
+            tooltip={"html": "<b>📍 위치:</b> {name}", "style": {"background": "#333", "color": "white", "padding": "8px", "border-radius": "4px"}}
         ))
         
         # 2. 하단: 날짜별 상세 타임라인

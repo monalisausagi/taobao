@@ -17,30 +17,56 @@ if st.button("배송 경로 및 타임라인 조회"):
         # 1. 상단: 세계지도 시뮬레이션
         st.subheader("📍 글로벌 이동 경로")
         
-        map_data = pd.DataFrame({
-            'lat': [37.5665, 35.1796], 
-            'lon': [126.9780, 129.0756],
-            'name': ['해외 물류센터 (출발)', '한국 도착지']
-        })
+        # 주요 거점 좌표 데이터 (중국 물류센터 ➔ 세관/항구 ➔ 한국 최종 도착지)
+        points_data = pd.DataFrame([
+            {"name": "중국 물류센터", "lat": 37.50, "lon": 122.12}, # 웨이하이 부근
+            {"name": "인천항 세관", "lat": 37.45, "lon": 126.63},
+            {"name": "국내 배송지", "lat": 35.18, "lon": 129.07}  # 도착지
+        ])
         
-        # 지도 스타일을 토큰이 필요 없는 기본 스타일(None 또는 스타일 변경)로 지정
+        # 구간별 연결 선(Arc) 데이터
+        arc_data = pd.DataFrame([
+            # 중국 물류센터 ➔ 인천항
+            {"from_lon": 122.12, "from_lat": 37.50, "to_lon": 126.63, "to_lat": 37.45},
+            # 인천항 ➔ 국내 배송지
+            {"from_lon": 126.63, "from_lat": 37.45, "to_lon": 129.07, "to_lat": 35.18}
+        ])
+
+        # 지도 레이어 설정
+        # 1) 거점 위치 점 (크기를 적당히 줄임)
+        scatterplot_layer = pdk.Layer(
+            'ScatterplotLayer',
+            data=points_data,
+            get_position='[lon, lat]',
+            get_color='[255, 75, 75, 220]',
+            get_radius=15000,  # 기존보다 훨씬 작게 축소
+            pickable=True
+        )
+
+        # 2) 이동 경로 곡선 (중국 ➔ 한국 세관 ➔ 최종 도착지)
+        arc_layer = pdk.Layer(
+            'ArcLayer',
+            data=arc_data,
+            get_source_position='[from_lon, from_lat]',
+            get_target_position='[to_lon, to_lat]',
+            get_source_color='[255, 140, 0, 200]', # 출발/중간 경로 색상 (주황)
+            get_target_color='[0, 200, 100, 200]', # 도착 경로 색상 (초록)
+            get_width=4,
+            pickable=True
+        )
+
+        # 지도 뷰 설정
+        view_state = pdk.ViewState(
+            latitude=36.5,
+            longitude=125.0,
+            zoom=5,
+            pitch=40,
+        )
+
         st.pydeck_chart(pdk.Deck(
-            map_style=None,  # 외부 토큰 에러를 없애기 위해 기본 배경으로 설정
-            initial_view_state=pdk.ViewState(
-                latitude=36.0,
-                longitude=120.0,
-                zoom=4,
-                pitch=30,
-            ),
-            layers=[
-                pdk.Layer(
-                    'ScatterplotLayer',
-                    data=map_data,
-                    get_position='[lon, lat]',
-                    get_color='[255, 75, 75, 200]',
-                    get_radius=100000,
-                ),
-            ],
+            layers=[arc_layer, scatterplot_layer],
+            initial_view_state=view_state,
+            tooltip={"text": "{name}"}
         ))
         
         # 2. 하단: 날짜별 타임라인

@@ -1,2 +1,5 @@
-requests
+streamlit
+pandas
+pydeck
 beautifulsoup4
+playwright

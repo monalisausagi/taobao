@@ -14,37 +14,36 @@ if st.button("배송 경로 및 타임라인 조회"):
     if waybill_no:
         st.success(f"운송장 번호 {waybill_no} 조회 완료!")
         
-        # 1. 상단: 세계지도 시뮬레이션 (중국 웨이하이/이우 ➔ 대한민국)
+        # 1. 상단: 세계지도 시뮬레이션
         st.subheader("📍 글로벌 이동 경로")
         
-        # 지도에 표시할 좌표 예시 (출발지/도착지)
         map_data = pd.DataFrame({
             'lat': [37.5665, 35.1796], 
             'lon': [126.9780, 129.0756],
             'name': ['해외 물류센터 (출발)', '한국 도착지']
         })
         
-        # 세계지도 시각화
+        # 지도 스타일을 토큰이 필요 없는 기본 스타일(None 또는 스타일 변경)로 지정
         st.pydeck_chart(pdk.Deck(
-            map_style='mapbox://styles/mapbox/light-v9',
+            map_style=None,  # 외부 토큰 에러를 없애기 위해 기본 배경으로 설정
             initial_view_state=pdk.ViewState(
                 latitude=36.0,
                 longitude=120.0,
                 zoom=4,
-                pitch=50,
+                pitch=30,
             ),
             layers=[
                 pdk.Layer(
                     'ScatterplotLayer',
                     data=map_data,
                     get_position='[lon, lat]',
-                    get_color='[200, 30, 0, 160]',
-                    get_radius=50000,
+                    get_color='[255, 75, 75, 200]',
+                    get_radius=100000,
                 ),
             ],
         ))
         
-        # 2. 하단: 날짜별 타임라인 (유니패스 크롤링 데이터 연결 부분)
+        # 2. 하단: 날짜별 타임라인
         st.subheader("📅 날짜별 상세 진행 상황")
         
         timeline_data = [

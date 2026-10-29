@@ -3,14 +3,14 @@ import requests
 import streamlit as st
 import pydeck as pdk
 
-# 페이지 설정
+# 페이지 설정 (오류 수정: page_type -> layout="wide")
 st.set_page_config(
     page_title="국제소포추적",
-    page_type="wide",
+    layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# 타이틀
+# 타이틀 고정
 st.title("📦 국제소포추적")
 st.markdown(
     "실시간 해외직구 및 국내 택배 물류 경로를 정밀 추적하는 스마트 유틸리티입니다."
@@ -24,7 +24,7 @@ shipping_mode = st.sidebar.selectbox(
     "운송 방식", ["자동 (송장 패턴 감지)", "국제 송장 (전체 구간)", "국내 단독 송장"]
 )
 
-# 글로벌 출발지 데이터베이스 (다변화)
+# 글로벌 출발지 데이터베이스 (대폭 다변화)
 origin_db = {
     "중국 웨이하이 (항구/물류센터)": {"lat": 37.513, "lon": 122.115, "country": "중국"},
     "중국 상하이 (항구/공항)": {"lat": 31.230, "lon": 121.473, "country": "중국"},
@@ -52,7 +52,7 @@ courier = st.sidebar.selectbox(
     ],
 )
 
-# 송장번호 입력 (오직 숫자만 허용하도록 가이드 및 필터링)
+# 송장번호 입력 (오직 숫자만 허용하도록 안내)
 st.sidebar.markdown("---")
 tracking_input = st.sidebar.text_input(
     "송장번호 입력 (숫자만)",
@@ -75,7 +75,6 @@ def get_precise_coordinates(address):
     if not address:
         return None, None, "주소가 입력되지 않았습니다."
 
-    # Nominatim API (대한민국 바운더리 내 검색 엄격 제한, 상세 번지수 파싱 유도)
     url = "https://nominatim.openstreetmap.org/search"
     params = {
         "q": address,
@@ -84,7 +83,7 @@ def get_precise_coordinates(address):
         "countrycodes": "kr",  # 대한민국 내로 엄격히 제한
         "addressdetails": 1,
     }
-    headers = {"User-Agent": "InternationalParcelTracker/2.6"}
+    headers = {"User-Agent": "InternationalParcelTracker/2.7"}
 
     try:
         response = requests.get(url, params=params, headers=headers, timeout=5)
@@ -96,7 +95,6 @@ def get_precise_coordinates(address):
             lon = float(item["lon"])
             display_name = item.get("display_name", "")
 
-            # 번지수/건물번호 포함 여부 확인 (주소 상세도 체크)
             address_details = item.get("address", {})
             has_housenumber = (
                 "house_number" in address_details
@@ -159,11 +157,9 @@ if query_btn:
 
     # 국내 세관/인항 거점 좌표 (인천항/인천공항 근처)
     customs_lat, customs_lon = 37.456, 126.652
-    # 국내 메인 허브 (예: 곤지암/대전 허브)
+    # 국내 메인 허브
     hub_lat, hub_lon = 37.335, 127.234
 
-    # 지도 레이어 구성 (Pydeck)
-    # 전체 경로 라인 데이터
     path_data = [
         {
             "path": [
@@ -176,7 +172,6 @@ if query_btn:
         }
     ]
 
-    # 마커 데이터
     marker_data = [
         {"coordinates": [orig_lon, orig_lat], "name": f"출발: {selected_origin_name}", "type": "origin"},
         {"coordinates": [customs_lon, customs_lat], "name": "인천항/세관 통관장", "type": "customs"},
@@ -184,7 +179,6 @@ if query_btn:
         {"coordinates": [dest_lon, dest_lat], "name": "최종 도착지", "type": "destination"},
     ]
 
-    # Pydeck 맵 렌더링
     layer_path = pdk.Layer(
         "PathLayer",
         path_data,
